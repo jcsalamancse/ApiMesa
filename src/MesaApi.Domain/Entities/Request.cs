@@ -22,8 +22,8 @@ public class Request : BaseEntity
     public ICollection<RequestData> RequestData { get; set; } = new List<RequestData>();
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
 }
-pub
-lic class RequestStep : BaseEntity
+
+public class RequestStep : BaseEntity
 {
     public int RequestId { get; set; }
     public string StepName { get; set; } = string.Empty;

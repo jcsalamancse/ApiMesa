@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using MesaApi.Domain.Entities;
+using MesaApi.Domain.Enums;
 
 namespace MesaApi.Domain.Interfaces;
 

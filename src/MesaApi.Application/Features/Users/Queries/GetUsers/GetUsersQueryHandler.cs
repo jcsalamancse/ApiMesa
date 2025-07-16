@@ -1,22 +1,21 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MesaApi.Application.Common.Models;
 using MesaApi.Domain.Entities;
-using MesaApi.Infrastructure.Data;
+using MesaApi.Domain.Interfaces;
 
 namespace MesaApi.Application.Features.Users.Queries.GetUsers;
 
 public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<PagedResult<UserListItemDto>>>
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<GetUsersQueryHandler> _logger;
 
     public GetUsersQueryHandler(
-        ApplicationDbContext context,
+        IUnitOfWork unitOfWork,
         ILogger<GetUsersQueryHandler> logger)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -24,8 +23,9 @@ public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<PagedR
     {
         try
         {
-            // Start with base query
-            IQueryable<User> usersQuery = _context.Users.AsNoTracking();
+            // Get all users first
+            var allUsers = await _unitOfWork.Users.GetAllAsync(cancellationToken);
+            var usersQuery = allUsers.AsEnumerable();
 
             // Apply filters
             if (request.IsActive.HasValue)
@@ -51,14 +51,14 @@ public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<PagedR
             }
 
             // Get total count
-            var totalCount = await usersQuery.CountAsync(cancellationToken);
+            var totalCount = usersQuery.Count();
 
             // Apply pagination
-            var pagedUsers = await usersQuery
+            var pagedUsers = usersQuery
                 .OrderBy(u => u.Name)
                 .Skip((request.PageNumber - 1) * request.PageSize)
                 .Take(request.PageSize)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             // Map to DTOs
             var userDtos = pagedUsers.Select(u => new UserListItemDto(

@@ -1,21 +1,20 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MesaApi.Application.Common.Models;
-using MesaApi.Infrastructure.Data;
+using MesaApi.Domain.Interfaces;
 
 namespace MesaApi.Application.Features.Roles.Queries.GetRoleById;
 
 public class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, Result<RoleDetailDto>>
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<GetRoleByIdQueryHandler> _logger;
 
     public GetRoleByIdQueryHandler(
-        ApplicationDbContext context,
+        IUnitOfWork unitOfWork,
         ILogger<GetRoleByIdQueryHandler> logger)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -23,14 +22,7 @@ public class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, Result<
     {
         try
         {
-            var role = await _context.Roles
-                .Where(r => r.Id == request.Id)
-                .Select(r => new
-                {
-                    Role = r,
-                    AssignedUsersCount = _context.RequestSteps.Count(s => s.RoleId == r.Id)
-                })
-                .FirstOrDefaultAsync(cancellationToken);
+            var role = await _unitOfWork.Roles.GetByIdAsync(request.Id, cancellationToken);
 
             if (role == null)
             {
@@ -38,14 +30,18 @@ public class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, Result<
                 return Result<RoleDetailDto>.Failure($"Role with ID {request.Id} not found");
             }
 
+            // Get count of assigned users for this role
+            var requestSteps = await _unitOfWork.RequestSteps.FindAsync(s => s.RoleId == role.Id, cancellationToken);
+            var assignedUsersCount = requestSteps.Count();
+
             var roleDto = new RoleDetailDto(
-                Id: role.Role.Id,
-                Name: role.Role.Name,
-                Description: role.Role.Description,
-                IsActive: role.Role.IsActive,
-                CreatedAt: role.Role.CreatedAt,
-                UpdatedAt: role.Role.UpdatedAt,
-                AssignedUsersCount: role.AssignedUsersCount
+                Id: role.Id,
+                Name: role.Name,
+                Description: role.Description,
+                IsActive: role.IsActive,
+                CreatedAt: role.CreatedAt,
+                UpdatedAt: role.UpdatedAt,
+                AssignedUsersCount: assignedUsersCount
             );
 
             _logger.LogInformation("Retrieved role with ID: {RoleId}", request.Id);

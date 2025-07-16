@@ -1,21 +1,20 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MesaApi.Application.Common.Models;
-using MesaApi.Infrastructure.Data;
+using MesaApi.Domain.Interfaces;
 
 namespace MesaApi.Application.Features.Roles.Queries.GetRoles;
 
 public class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result<List<RoleDto>>>
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<GetRolesQueryHandler> _logger;
 
     public GetRolesQueryHandler(
-        ApplicationDbContext context,
+        IUnitOfWork unitOfWork,
         ILogger<GetRolesQueryHandler> logger)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -23,14 +22,16 @@ public class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result<List<R
     {
         try
         {
-            var query = _context.Roles.AsQueryable();
+            var roles = await _unitOfWork.Roles.GetAllAsync(cancellationToken);
 
+            var filteredRoles = roles.AsEnumerable();
+            
             if (request.IsActive.HasValue)
             {
-                query = query.Where(r => r.IsActive == request.IsActive.Value);
+                filteredRoles = filteredRoles.Where(r => r.IsActive == request.IsActive.Value);
             }
 
-            var roles = await query
+            var roleDtos = filteredRoles
                 .OrderBy(r => r.Name)
                 .Select(r => new RoleDto(
                     Id: r.Id,
@@ -39,11 +40,11 @@ public class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result<List<R
                     IsActive: r.IsActive,
                     CreatedAt: r.CreatedAt
                 ))
-                .ToListAsync(cancellationToken);
+                .ToList();
 
-            _logger.LogInformation("Retrieved {Count} roles", roles.Count);
+            _logger.LogInformation("Retrieved {Count} roles", roleDtos.Count);
             
-            return Result<List<RoleDto>>.Success(roles);
+            return Result<List<RoleDto>>.Success(roleDtos);
         }
         catch (Exception ex)
         {
